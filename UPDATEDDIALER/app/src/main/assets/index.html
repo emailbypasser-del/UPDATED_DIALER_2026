@@ -1,0 +1,1293 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no"/>
+    <title>ACCM Autodialer</title>
+    <style>
+        :root{
+          --accent:#8b5cf6; --accent-2:#6b3fa8; --accent-light:#a78bfa;
+          --cyan:#22c1c3; --muted:#bfc3ca; --green:#10b981; --yellow:#fbbf24;
+          --red:#ef4444; --blue:#3b82f6;
+          --bg1:#0a0a0c; --bg2:#0f0f12; --card-bg:#151519;
+          color: #f0f0f2; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        *{box-sizing:border-box}
+        html,body{height:100%; margin:0; padding:0; overflow-x:hidden;
+          background: radial-gradient(ellipse 1200px 400px at 10% 8%, rgba(139,92,246,0.15), transparent),
+                      radial-gradient(ellipse 1000px 350px at 90% 92%, rgba(34,193,195,0.1), transparent),
+                      var(--bg1);}
+        body{-webkit-tap-highlight-color:transparent}
+
+        /* Animations */
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes slideDown{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+        @keyframes ripple{0%{transform:scale(0);opacity:1}100%{transform:scale(4);opacity:0}}
+        @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(139,92,246,0.3)}50%{box-shadow:0 0 40px rgba(139,92,246,0.6)}}
+
+        .wrap{max-width:560px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;padding:16px;animation:fadeIn 0.4s ease}
+        .modal{max-height:90dvh; overflow:auto}
+        .modal .modal-section{max-width:100%}
+        .report-grid{grid-template-columns:1fr 1fr}
+        @media (max-width:420px){
+          .wrap{padding:12px}
+          header.appbar{gap:10px;padding:12px}
+          .logo{width:60px;height:60px}
+          .series{font-size:18px}
+          .stat-block strong{font-size:16px}
+          .btn{font-size:12px;padding:10px 12px}
+          .modal{padding:16px;border-radius:14px}
+          .report-grid{grid-template-columns:1fr}
+        }
+
+        /* Header */
+        header.appbar{display:flex;align-items:center;gap:14px;padding:14px;border-radius:16px;
+          background:linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+          backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.08);
+          box-shadow:0 10px 40px rgba(0,0,0,0.6);margin-bottom:16px;animation:slideDown 0.5s ease}
+
+        .logo{width:72px;height:72px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+          background:linear-gradient(135deg, rgba(139,92,246,0.15), rgba(34,193,195,0.1));
+          border:1px solid rgba(255,255,255,0.06);position:relative;overflow:hidden}
+        .logo::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+          transform:translateX(-100%);transition:transform 0.6s}
+        .logo:active::before{transform:translateX(100%)}
+        .logo svg{width:80%;height:80%;filter:drop-shadow(0 4px 12px rgba(139,92,246,0.4))}
+
+        .head-right{flex:1;display:flex;flex-direction:column;gap:8px}
+        .series-row{display:flex;justify-content:space-between;align-items:center}
+        .series{font-weight:900;font-size:22px;background:linear-gradient(90deg,var(--accent),var(--cyan));
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+          letter-spacing:1.2px;text-shadow:0 2px 10px rgba(139,92,246,0.2)}
+        .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+
+        .stats-row{display:flex;gap:8px}
+        .stat-block{flex:1;background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;
+          border:1px solid rgba(255,255,255,0.05);text-align:center;transition:all 0.3s}
+        .stat-block:active{transform:scale(0.97);background:rgba(255,255,255,0.05)}
+        .stat-block small{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+        .stat-block strong{font-size:18px;font-weight:800;color:#fff}
+
+        /* Cards */
+        .card{background:linear-gradient(135deg, var(--card-bg), rgba(21,21,25,0.8));
+          border-radius:14px;padding:14px;margin-bottom:14px;
+          border:1px solid rgba(255,255,255,0.06);
+          box-shadow:0 12px 36px rgba(0,0,0,0.5);animation:slideUp 0.5s ease;position:relative;overflow:hidden}
+        .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+          background:linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)}
+
+        .base-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+        .base-number{font-weight:800;font-size:18px;margin-top:6px;color:#fff;letter-spacing:0.5px}
+
+        .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+        .btn{padding:11px 16px;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;
+          border:none;color:#fff;transition:all 0.3s;position:relative;overflow:hidden;letter-spacing:0.3px}
+        .btn::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,0.1);
+          transform:translateY(100%);transition:transform 0.3s}
+        .btn:active::before{transform:translateY(0)}
+        .btn:disabled{opacity:0.5;cursor:not-allowed;filter:grayscale(0.5)}
+
+        .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));
+          box-shadow:0 6px 20px rgba(139,92,246,0.3)}
+        .btn-primary:active{transform:translateY(1px);box-shadow:0 4px 12px rgba(139,92,246,0.4)}
+
+        .btn-cyan{background:linear-gradient(135deg,var(--cyan),var(--blue));
+          box-shadow:0 6px 20px rgba(34,193,195,0.3)}
+        .btn-cyan:active{transform:translateY(1px)}
+
+        .btn-ghost{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+          color:var(--muted);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+        .btn-ghost:active{background:rgba(255,255,255,0.08)}
+
+        /* Hero */
+        .hero{display:flex;flex-direction:column;align-items:center;justify-content:center;
+          flex:1;padding:20px 0;animation:fadeIn 0.6s ease 0.2s backwards}
+
+        .big-logo{width:200px;height:200px;border-radius:20px;display:flex;align-items:center;justify-content:center;
+          background:linear-gradient(135deg, rgba(139,92,246,0.12), rgba(34,193,195,0.08));
+          border:1px solid rgba(255,255,255,0.08);
+          box-shadow:0 20px 60px rgba(0,0,0,0.6), inset 0 1px rgba(255,255,255,0.1);
+          position:relative;overflow:hidden;transition:transform 0.3s}
+        .big-logo::after{content:'';position:absolute;inset:-100%;
+          background:linear-gradient(45deg, transparent, rgba(255,255,255,0.05), transparent);
+          animation:shimmer 3s infinite}
+        .big-logo:active{transform:scale(0.98)}
+        .big-logo svg{width:75%;height:75%;filter:drop-shadow(0 8px 24px rgba(139,92,246,0.5))}
+
+        .status-indicator{margin-top:16px;display:flex;align-items:center;gap:10px;
+          padding:10px 18px;border-radius:12px;background:rgba(255,255,255,0.03);
+          border:1px solid rgba(255,255,255,0.06)}
+        .status-dot{width:10px;height:10px;border-radius:50%;background:var(--green);
+          box-shadow:0 0 16px var(--green);animation:pulse 2s infinite}
+        .status-dot.paused{background:var(--yellow);box-shadow:0 0 16px var(--yellow)}
+        .status-text{font-weight:700;font-size:14px;letter-spacing:0.5px}
+
+        .toggle-row{display:flex;align-items:center;gap:12px;margin-top:20px}
+        .toggle{width:56px;height:30px;border-radius:999px;
+          background:rgba(255,255,255,0.08);position:relative;cursor:pointer;
+          border:1px solid rgba(255,255,255,0.1);transition:all 0.3s}
+        .toggle.on{background:linear-gradient(135deg, var(--green), #059669)}
+        .toggle.off{background:rgba(255,255,255,0.06)}
+        .knob{width:24px;height:24px;border-radius:50%;position:absolute;top:2px;
+          background:#fff;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+        .toggle.on .knob{left:28px;box-shadow:0 4px 16px rgba(16,185,129,0.5)}
+        .toggle.off .knob{left:2px}
+
+        /* Call Button */
+        .call-wrap{padding:16px 0;animation:slideUp 0.6s ease 0.3s backwards}
+        .call-btn{width:100%;padding:18px;border-radius:16px;font-size:20px;font-weight:900;
+          border:none;cursor:pointer;color:#fff;letter-spacing:1px;position:relative;overflow:hidden;
+          background:linear-gradient(135deg,var(--cyan),var(--accent));
+          box-shadow:0 12px 40px rgba(139,92,246,0.4), 0 0 0 0 rgba(139,92,246,0.7);
+          transition:all 0.3s}
+        .call-btn::before{content:'';position:absolute;inset:0;
+          background:linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+          transform:translateX(-100%);transition:transform 0.5s}
+        .call-btn:active{transform:scale(0.98);box-shadow:0 8px 24px rgba(139,92,246,0.5)}
+        .call-btn:active::before{transform:translateX(100%)}
+        .call-btn.calling{animation:glow 1.5s infinite;pointer-events:none}
+        .call-btn .spinner{display:none;width:20px;height:20px;border:3px solid rgba(255,255,255,0.3);
+          border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;
+          position:absolute;right:20px;top:50%;transform:translateY(-50%)}
+        .call-btn.calling .spinner{display:block}
+
+        .call-hint{text-align:center;color:var(--muted);margin-top:10px;font-size:12px;
+          line-height:1.5;padding:0 20px}
+
+        /* Modals */
+        .modal-backdrop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+          background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);z-index:999;padding:16px;
+          animation:fadeIn 0.2s ease}
+        .modal-backdrop.show{display:flex}
+
+        .modal{width:100%;max-width:420px;border-radius:16px;
+          background:linear-gradient(135deg, #151519, #1a1a1e);
+          padding:20px;border:1px solid rgba(255,255,255,0.1);color:#f0f0f2;
+          box-shadow:0 30px 80px rgba(0,0,0,0.9);animation:slideUp 0.3s ease;position:relative}
+        .modal h3{margin:0 0 16px;font-size:20px;font-weight:800;letter-spacing:0.5px;
+          background:linear-gradient(90deg,var(--accent-light),var(--cyan));
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+        .modal-section{margin:16px 0}
+        .modal-info{font-weight:800;font-size:16px;margin:8px 0;padding:12px;
+          background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+
+        textarea{width:100%;min-height:100px;background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.08);color:#fff;padding:12px;
+          border-radius:10px;font-size:14px;resize:vertical;font-family:inherit;transition:all 0.3s}
+        textarea:focus{outline:none;border-color:var(--accent);background:rgba(255,255,255,0.06);
+          box-shadow:0 0 0 3px rgba(139,92,246,0.1)}
+        textarea::placeholder{color:var(--muted)}
+        textarea[readonly]{opacity:0.7}
+
+        .tag-grid{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+        .tag{flex:1;min-width:90px;padding:14px 10px;text-align:center;border-radius:12px;
+          cursor:pointer;font-weight:800;font-size:13px;transition:all 0.3s;
+          border:2px solid transparent;position:relative;overflow:hidden}
+        .tag::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,0.1);
+          transform:scale(0);border-radius:50%;transition:transform 0.4s}
+        .tag:active::before{transform:scale(2)}
+        .tag.busy{background:linear-gradient(135deg, #fbbf24, #f59e0b);color:#1f2937;
+          box-shadow:0 6px 20px rgba(251,191,36,0.3)}
+        .tag.answered{background:linear-gradient(135deg, #10b981, #059669);color:#fff;
+          box-shadow:0 6px 20px rgba(16,185,129,0.3)}
+        .tag.unanswered{background:linear-gradient(135deg, #ef4444, #dc2626);color:#fff;
+          box-shadow:0 6px 20px rgba(239,68,68,0.3)}
+        .tag:active{transform:scale(0.95)}
+
+        .report-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+        .report-btn{padding:14px;text-align:center;border-radius:12px;cursor:pointer;
+          font-weight:700;font-size:13px;background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.08);color:#fff;transition:all 0.3s}
+        .report-btn:active{transform:scale(0.97);background:rgba(255,255,255,0.08)}
+        .report-btn.full{grid-column:1/-1;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+          border:none;box-shadow:0 6px 20px rgba(139,92,246,0.3)}
+
+        .modal-footer{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+
+        /* Loading overlay */
+        .loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);
+          backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;
+          z-index:1000;animation:fadeIn 0.2s ease}
+        .loading-overlay.show{display:flex}
+        .loader{width:60px;height:60px;border:4px solid rgba(255,255,255,0.1);
+          border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+
+        /* Toast */
+        .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);
+          background:linear-gradient(135deg, #1f2937, #111827);padding:14px 24px;
+          border-radius:12px;color:#fff;font-weight:600;font-size:14px;
+          box-shadow:0 10px 40px rgba(0,0,0,0.8);z-index:1001;
+          border:1px solid rgba(255,255,255,0.1);opacity:0;transition:all 0.3s;pointer-events:none}
+        .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+        @media (max-width:420px){
+          .big-logo{width:170px;height:170px}
+          .btn{font-size:12px;padding:10px 14px}
+          .stat-block strong{font-size:16px}
+        }
+    </style>
+</head>
+<body style="overscroll-behavior:none;">
+<div class="wrap">
+
+    <!-- Header -->
+    <header class="appbar">
+        <div class="logo">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                        <stop offset="0" stop-color="#8b5cf6"/>
+                        <stop offset="0.5" stop-color="#a78bfa"/>
+                        <stop offset="1" stop-color="#22c1c3"/>
+                    </linearGradient>
+                </defs>
+                <text x="50%" y="58%" text-anchor="middle" font-family="Inter, Arial" font-weight="900" font-size="68" fill="url(#g)" style="letter-spacing:2px">ACCM</text>
+            </svg>
+        </div>
+
+        <div class="head-right">
+          
+                <input id="agentNameInput" type="text" placeholder="Agent Name" style="width:120px;padding:6px 10px;font-size:15px;border-radius:6px;border:1px solid #ccc;margin-right:8px;" />
+                <input id="branchNameInput" type="text" placeholder="Branch Name" style="width:120px;padding:6px 10px;font-size:15px;border-radius:6px;border:1px solid #ccc;" />
+                <button id="saveAgentBranchBtn" style="padding:6px 14px;font-size:15px;border-radius:6px;background:#1976d2;color:#fff;border:none;margin-left:8px;">Save</button>
+            
+                <div class="series-row">
+                <div>
+                    <div class="label">Series</div>
+                    <div class="series" id="seriesValue"></div>
+                </div>
+                <button class="btn btn-ghost" onclick="openEditTemplate()">Template</button>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-block">
+                    <small>Last 4</small>
+                    <strong id="last4">—</strong>
+                </div>
+                <div class="stat-block">
+                    <small>Attempts</small>
+                    <strong id="attempts">0</strong>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Controls -->
+    <div class="card">
+        <div class="base-header">
+            <div>
+                <div class="label">Base Number (7 digits)</div>
+                <div class="base-number" id="baseNumber">0912123</div>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="openEditBase()">Edit Base</button>
+            <button class="btn btn-primary" onclick="openTagModal()">Tag Last</button>
+            <button class="btn btn-cyan" onclick="openConfirmSend()">Send SMS</button>
+            <button class="btn btn-ghost" onclick="openTwoHourly()">Reports</button>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px">
+            <div class="label">Last 4 (editable) and Attempts</div>
+            <input id="last4Input" maxlength="4" placeholder="0000" autocomplete="off" inputmode="numeric" pattern="[0-9]*" style="flex:1;min-width:120px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:#0f0f12;color:#fff;outline:none"/>
+            <input id="attemptsInput" type="number" min="1" max="10" value="5" autocomplete="off" style="width:90px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:#0f0f12;color:#fff;outline:none"/>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px;align-items:center">
+            <div class="label">Turn on shuffle</div>
+            <div id="shuffleToggle" class="toggle off" onclick="toggleShuffle()">
+                <div class="knob"></div>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px;align-items:center">
+            <div class="label">Interval (seconds)</div>
+            <input id="intervalInput" type="number" min="1" max="60" value="5" autocomplete="off" style="width:120px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:#0f0f12;color:#fff;outline:none"/>
+            <button class="btn btn-primary" onclick="applyInterval()">Set</button>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="label">Auto SMS (unanswered)</div>
+            <div id="autoSmsToggle" class="toggle off" onclick="toggleAutoSms()"><div class="knob"></div></div>
+            <br>
+            <input id="adminNumberInput" maxlength="11" placeholder="11 digits" autocomplete="off" inputmode="numeric" pattern="[0-9]*" style="width:150px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:#0f0f12;color:#fff;outline:none"/>ADMIN
+            <button class="btn btn-primary" onclick="saveAdmin()">Save</button>
+        </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero">
+        <div class="big-logo" id="logoArea" style="display:flex;align-items:center;justify-content:center">
+            <span id="logoText" style="font-weight:900;font-size:36px;background:linear-gradient(90deg,#22c1c3,#8b5cf6,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:6px">ACCM</span>
+        </div>
+
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <div class="status-text" id="statusText">ACTIVE</div>
+        </div>
+
+        <div class="toggle-row">
+            <div class="label">SYSTEM</div>
+            <div id="pauseToggle" class="toggle on" onclick="togglePause()">
+                <div class="knob"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Button -->
+    <div class="call-wrap">
+        <button id="callBtn" class="call-btn" onclick="startCall()">
+            CALL NOW
+            <div class="spinner"></div>
+        </button>
+        <div class="call-hint">Auto SMS after call · Tag as Busy / Answered / Unanswered</div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Two-Hour Report Modal -->
+<div id="twoModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'twoModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3>Call Reports</h3>
+        <div class="report-grid">
+            <div class="report-btn" onclick="requestReport('9-11')">9AM - 11AM</div>
+            <div class="report-btn" onclick="requestReport('11-14')">11AM - 2PM</div>
+            <div class="report-btn" onclick="requestReport('14-16')">2PM - 4PM</div>
+            <div class="report-btn" onclick="requestReport('16-18')">4PM - 6PM</div>
+            <div class="report-btn full" onclick="requestReport('all')">View Full Report</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('twoModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Template Modal -->
+<div id="editModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'editModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3>Message Template</h3>
+        <div class="modal-section">
+            <div class="label">Template (use {{last4}} placeholder)</div>
+            <textarea id="messageTemplate" placeholder="Thank you! Your reference: {{last4}}"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="loadTemplate()">Load</button>
+            <button class="btn btn-primary" onclick="saveTemplate()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Send SMS Modal -->
+<div id="confirmSendModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'confirmSendModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3>Send SMS</h3>
+        <div class="modal-section">
+            <div class="label">To</div>
+            <div class="modal-info" id="confirmNumber">—</div>
+            <div class="label">Message Preview</div>
+            <textarea id="confirmMessage" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('confirmSendModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmSend()">Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tag Call Modal -->
+<div id="tagModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'tagModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3>Tag Call</h3>
+        <div class="modal-section">
+            <div class="label">Number</div>
+            <div class="modal-info" id="tagNumber">—</div>
+            <div class="label">Choose Status</div>
+            <div class="tag-grid">
+                <div class="tag busy" onclick="applyTag('busy')">BUSY</div>
+                <div class="tag answered" onclick="applyTag('answered')">ANSWERED</div>
+                <div class="tag unanswered" onclick="applyTag('unanswered')">UNANSWERED</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('tagModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Base Modal -->
+<div id="editBaseModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'editBaseModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>Edit Base Number</h3>
+    <div class="modal-section">
+      <div class="label">Base Number (7 digits)</div>
+      <input id="baseInput" maxlength="7" placeholder="Enter 7 digits" autocomplete="off" inputmode="numeric" pattern="[0-9]*" style="width:180px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:#0f0f12;color:#fff;outline:none" />
+      <div class="label" style="margin-top:10px">Series Preview</div>
+      <div class="series" id="seriesPreview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editBaseModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBaseNumber()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="fullReportModal" class="modal-backdrop" onclick="closeModalBackdrop(event, 'fullReportModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h3>Full Report</h3>
+        <div id="fullReportSummary" class="modal-section"></div>
+        <div id="fullReportContent" class="modal-section"></div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="exportAndSendReport()">Export Report</button>
+            <button class="btn btn-primary" onclick="closeModal('fullReportModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loader"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+    /* ===== Android Bridge Interface =====
+       Expected Android methods (all @JavascriptInterface):
+       - void startCall()
+       - void pauseDialing(int paused)  // 1=pause, 0=resume
+       - void openEditBase()
+       - void saveMessageTemplate(String template)
+       - void sendSms(String number, String message)
+       - void tagCall(String number, String tag)
+       - String getReport(String range)
+       - void uiReady()
+       - void showToast(String message)
+    */
+
+    const AndroidBridge = (typeof Android !== 'undefined') ? Android : {
+      startCall: () => console.log('Android: startCall'),
+      pauseDialing: (p) => console.log('Android: pauseDialing', p),
+      openEditBase: () => console.log('Android: openEditBase'),
+      saveMessageTemplate: (t) => console.log('Android: saveMessageTemplate', t),
+      sendSms: (n, m) => console.log('Android: sendSms', n, m),
+      tagCall: (n, t) => console.log('Android: tagCall', n, t),
+      getReport: (r) => { console.log('Android: getReport', r); return '{}'; },
+      uiReady: () => console.log('Android: uiReady'),
+      showToast: (s) => showToast(s),
+      getAdminNumber: () => '09924387967',
+      setAutoSmsUnanswered: (v) => console.log('Android: setAutoSmsUnanswered', v),
+      updateAdminNumber: (n) => console.log('Android: updateAdminNumber', n)
+    };
+
+    // ===== State Management =====
+    let state = {
+      paused: false,
+      lastDialedNumber: null,
+      savedTemplate: '',
+      isCalling: false,
+      baseNumber: '0912123',
+      series: '0000000',
+      last4: '0000',
+      attempts: 5,
+      shuffle: false
+    };
+    let lastFullReportJSON = null;
+
+    // ===== UI Helper Functions =====
+    function showLoading() {
+      document.getElementById('loadingOverlay').classList.add('show');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('show');
+    }
+
+    function showToast(message, duration = 3000) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), duration);
+    }
+
+    function updateStatusIndicator() {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (state.paused) {
+        dot.classList.add('paused');
+        text.textContent = 'PAUSED';
+      } else {
+        dot.classList.remove('paused');
+        text.textContent = 'ACTIVE';
+      }
+    }
+
+    let isEditingLast4 = false;
+    let isEditingAttempts = false;
+
+    function updateSeriesDisplay() {
+      // Update the series display in the header
+      const seriesEl = document.querySelector('.series');
+      if (seriesEl && state.series) {
+        seriesEl.textContent = state.series;
+      }
+    }
+
+    function onBaseNumberEdit(newBase) {
+      state.series = newBase;
+      updateSeriesDisplay();
+      // Optionally, persist to Android
+      if (AndroidBridge && AndroidBridge.openEditBase) {
+        AndroidBridge.openEditBase(newBase);
+      }
+    }
+
+    function bindEditableInputs() {
+      const l4 = document.getElementById('last4Input');
+      const ai = document.getElementById('attemptsInput');
+      const baseInput = document.getElementById('baseInput');
+      if (!l4 || !ai) return;
+
+      l4.addEventListener('focus', () => { isEditingLast4 = true; });
+      l4.addEventListener('input', (e) => {
+        const raw = (e.target.value || '').replace(/\D/g, '').slice(0, 4);
+        e.target.value = raw;
+        state.last4 = raw;
+      });
+      l4.addEventListener('blur', () => {
+        let normalized = (state.last4 || '').replace(/\D/g, '').slice(0, 4).padStart(4, '0');
+        state.last4 = normalized;
+        l4.value = normalized;
+        const last4El = document.getElementById('last4');
+        if (last4El) last4El.textContent = normalized;
+        try { AndroidBridge.updateLast4(normalized); } catch (e) { console.warn(e); }
+        isEditingLast4 = false;
+        scheduleUpdate();
+      });
+
+      ai.addEventListener('focus', () => { isEditingAttempts = true; });
+      ai.addEventListener('input', (e) => {
+        const raw = (e.target.value || '').replace(/\D/g, '');
+        e.target.value = raw;
+        state.attempts = parseInt(raw || '0', 10) || 0;
+      });
+      ai.addEventListener('blur', () => {
+        let n = parseInt(ai.value || '1', 10);
+        if (isNaN(n)) n = 1;
+        n = Math.max(1, Math.min(10, n));
+        state.attempts = n;
+        ai.value = String(n);
+        const att = document.getElementById('attempts');
+        if (att) att.textContent = n;
+        try { AndroidBridge.updateAttempts(n); } catch (e) { console.warn(e); }
+        isEditingAttempts = false;
+        scheduleUpdate();
+      });
+
+      if (baseInput) {
+        baseInput.addEventListener('input', (e) => {
+          onBaseNumberEdit(e.target.value);
+        });
+      }
+    }
+
+    function applyShuffleToggleState() {
+      const t = document.getElementById('shuffleToggle');
+      if (!t) return;
+      t.classList.toggle('on', !!state.shuffle);
+      t.classList.toggle('off', !state.shuffle);
+    }
+
+    function toggleShuffle() {
+      state.shuffle = !state.shuffle;
+      applyShuffleToggleState();
+      try { AndroidBridge.setShuffle(state.shuffle ? 1 : 0); } catch (e) { console.warn(e); }
+      showToast('Shuffle ' + (state.shuffle ? 'enabled' : 'disabled'));
+      scheduleUpdate();
+    }
+
+    function startCall() {
+      if (state.isCalling) return;
+      if (state.paused) {
+        showToast('System is paused. Resume to make calls.');
+        return;
+      }
+
+      // Build the number to dial
+      const num = state.baseNumber + (state.last4 || '0000');
+
+      const btn = document.getElementById('callBtn');
+      btn.classList.add('calling');
+      state.isCalling = true;
+
+      try {
+        AndroidBridge.startCall();
+        showToast('Initiating call...');
+      } catch (e) {
+        console.error('startCall error:', e);
+        showToast('Error: Failed to start call');
+        btn.classList.remove('calling');
+        state.isCalling = false;
+      }
+
+      setTimeout(() => {
+        btn.classList.remove('calling');
+        state.isCalling = false;
+      }, 3000);
+    }
+
+    function togglePause() {
+      state.paused = !state.paused;
+      const toggle = document.getElementById('pauseToggle');
+
+      if (state.paused) {
+        toggle.classList.remove('on');
+        toggle.classList.add('off');
+        try {
+          AndroidBridge.pauseDialing(1);
+          showToast('System paused');
+        } catch (e) {
+          console.error('pauseDialing error:', e);
+        }
+      } else {
+        toggle.classList.remove('off');
+        toggle.classList.add('on');
+        try {
+          AndroidBridge.pauseDialing(0);
+          showToast('System resumed');
+        } catch (e) {
+          console.error('pauseDialing error:', e);
+        }
+      }
+
+      updateStatusIndicator();
+    }
+
+    function showModal(id) {
+      closeAllModals();
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.add('show');
+      }
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove('show');
+      }
+    }
+
+    function closeModalBackdrop(event, id) {
+      if (event.target.id === id) {
+        closeModal(id);
+      }
+    }
+
+    function closeAllModals() {
+      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('show'));
+    }
+
+    function openEditTemplate() {
+      showModal('editModal');
+      loadTemplate();
+    }
+
+    function saveTemplate() {
+      const template = document.getElementById('messageTemplate').value.trim();
+
+      if (!template) {
+        showToast('Template cannot be empty');
+        return;
+      }
+
+      try {
+        AndroidBridge.saveMessageTemplate(template);
+        state.savedTemplate = template;
+        showToast('Template saved successfully');
+        closeModal('editModal');
+      } catch (e) {
+        console.error('saveTemplate error:', e);
+        showToast('Error: Failed to save template');
+      }
+    }
+
+    function loadTemplate() {
+      document.getElementById('messageTemplate').value = state.savedTemplate || '';
+    }
+
+    function openConfirmSend() {
+      const num = state.lastDialedNumber || state.baseNumber;
+      document.getElementById('confirmNumber').textContent = num;
+
+      const template = state.savedTemplate || 'Thank you! Your reference: {{last4}}';
+      const last4Digits = (num + '').slice(-4);
+      const preview = template.replace(/\{\{last4\}\}/g, last4Digits);
+
+      document.getElementById('confirmMessage').value = preview;
+      showModal('confirmSendModal');
+    }
+
+    function confirmSend() {
+      showSmsLoading();
+      const num = document.getElementById('confirmNumber').textContent;
+      const msg = document.getElementById('confirmMessage').value;
+
+      if (!num || num === '—') {
+        hideSmsLoading(false);
+        showToast('No number available');
+        return;
+      }
+
+      if (!msg.trim()) {
+        hideSmsLoading(false);
+        showToast('Message cannot be empty');
+        return;
+      }
+
+      try {
+        AndroidBridge.sendSms(num, msg);
+        // Success/failure handled by updateFromAndroid
+        closeModal('confirmSendModal');
+      } catch (e) {
+        hideSmsLoading(false);
+        showToast('Error: Failed to send SMS');
+      }
+    }
+
+    function openTagModal() {
+      const num = state.lastDialedNumber || state.baseNumber;
+      document.getElementById('tagNumber').textContent = num;
+      showModal('tagModal');
+    }
+
+    function applyTag(tag) {
+      const num = document.getElementById('tagNumber').textContent;
+
+      if (!num || num === '—') {
+        showToast('No number to tag');
+        return;
+      }
+
+      showLoading();
+
+      try {
+        AndroidBridge.tagCall(num, tag);
+        showToast(`Call tagged as: ${tag.toUpperCase()}`);
+        closeModal('tagModal');
+      } catch (e) {
+        console.error('tagCall error:', e);
+        showToast('Error: Failed to tag call');
+      } finally {
+        setTimeout(hideLoading, 300);
+      }
+    }
+
+    function openTwoHourly() {
+      showModal('twoModal');
+    }
+
+    function requestReport(range) {
+      showLoading();
+      try {
+        const result = AndroidBridge.getReport(range);
+        closeModal('twoModal');
+        if (result && result !== '{}') {
+          try {
+            const reportData = JSON.parse(result);
+            renderFullReport(reportData, range);
+            showModal('fullReportModal');
+          } catch (parseError) {
+            console.error('Report parse error:', parseError);
+            showToast('Failed to parse report');
+          }
+        } else {
+          showToast('No report data');
+        }
+      } catch (e) {
+        console.error('getReport error:', e);
+        showToast('Error: Failed to get report');
+      } finally {
+        setTimeout(hideLoading, 300);
+      }
+    }
+    function openEditBase() {
+      // Show modal for editing base number
+      const modal = document.getElementById('editBaseModal');
+      if (modal) {
+        const baseInput = document.getElementById('baseInput');
+        const preview = document.getElementById('seriesPreview');
+        if (baseInput) {
+          baseInput.value = state.baseNumber || '';
+          baseInput.focus();
+          baseInput.addEventListener('input', function() {
+            const val = baseInput.value.replace(/\D/g, '').slice(0, 7);
+            preview.textContent = val;
+          });
+          preview.textContent = baseInput.value.replace(/\D/g, '').slice(0, 7);
+        }
+        modal.classList.add('show');
+      }
+    }
+
+    function saveBaseNumber() {
+      const baseInput = document.getElementById('baseInput');
+      const val = baseInput.value.replace(/\D/g, '').slice(0, 7);
+      if (val.length !== 7) {
+        showToast('Base number must be exactly 7 digits');
+        return;
+      }
+      state.baseNumber = val;
+      state.series = val;
+      document.getElementById('baseNumber').textContent = val;
+      document.getElementById('seriesValue').textContent = val;
+      closeModal('editBaseModal');
+      try {
+        AndroidBridge.openEditBase(val);
+      } catch (e) {
+        console.warn('openEditBase error:', e);
+      }
+      scheduleUpdate();
+    }
+
+    function updateFromAndroid(obj) {
+      if (!obj) return;
+
+      if (obj.series) {
+        state.series = obj.series;
+        document.getElementById('seriesValue').textContent = obj.series;
+      }
+
+      if (obj.last4) {
+        state.last4 = obj.last4;
+        document.getElementById('last4').textContent = obj.last4;
+        const l4 = document.getElementById('last4Input');
+        if (l4 && !isEditingLast4) l4.value = obj.last4;
+      }
+
+      if (typeof obj.attempts !== 'undefined') {
+        state.attempts = obj.attempts;
+        document.getElementById('attempts').textContent = obj.attempts;
+        const ai = document.getElementById('attemptsInput');
+        if (ai && !isEditingAttempts) ai.value = obj.attempts;
+      }
+
+      if (obj.base) {
+        state.baseNumber = obj.base;
+        document.getElementById('baseNumber').textContent = obj.base;
+      }
+
+      if (obj.lastDialed) {
+        state.lastDialedNumber = obj.lastDialed;
+      }
+
+      if (obj.messageTemplate) {
+        state.savedTemplate = obj.messageTemplate;
+      }
+
+      if (typeof obj.countdown !== 'undefined') {
+        const v = parseInt(obj.countdown||0,10);
+        const txt = document.getElementById('logoText');
+        if (txt) {
+          if (v > 0) {
+            txt.textContent = `Dialing in ${v}`;
+          } else {
+            txt.textContent = 'ACCM';
+          }
+        }
+      }
+
+      if (obj.toast) {
+        showToast(obj.toast);
+      }
+
+      if (typeof obj.paused !== 'undefined') {
+        state.paused = obj.paused;
+        const toggle = document.getElementById('pauseToggle');
+        if (state.paused) {
+          toggle.classList.remove('on');
+          toggle.classList.add('off');
+        } else {
+          toggle.classList.remove('off');
+          toggle.classList.add('on');
+        }
+        updateStatusIndicator();
+      }
+
+      if (typeof obj.shuffle !== 'undefined') {
+        state.shuffle = obj.shuffle;
+        applyShuffleToggleState();
+      }
+      if (typeof obj.callIntervalSec !== 'undefined') {
+        const ii = document.getElementById('intervalInput');
+        if (ii) ii.value = String(obj.callIntervalSec);
+      }
+      if (typeof obj.autoSmsUnanswered !== 'undefined') {
+        state.autoSmsUnanswered = !!obj.autoSmsUnanswered;
+        applyAutoSmsToggleState();
+      }
+      if (typeof obj.adminNumber !== 'undefined') {
+        const an = document.getElementById('adminNumberInput');
+        if (an) an.value = String(obj.adminNumber || '');
+      }
+    }
+
+    // Make updateFromAndroid globally accessible
+    window.updateFromAndroid = updateFromAndroid;
+
+    // ===== Keyboard Shortcuts =====
+    document.addEventListener('keydown', (e) => {
+      // ESC to close modals
+      if (e.key === 'Escape') {
+        closeAllModals();
+      }
+
+      // Space to toggle pause (when not in input)
+      if (e.key === ' ' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        togglePause();
+      }
+    });
+
+    // ===== Local Storage Functions =====
+    function saveToLocalStorage(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        console.error('localStorage error:', e);
+      }
+    }
+
+    function getFromLocalStorage(key) {
+      try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+      } catch (e) {
+        console.error('localStorage error:', e);
+        return null;
+      }
+    }
+
+    // ===== Data Persistence =====
+    function persistCallData() {
+      saveToLocalStorage('appState', state);
+    }
+
+    function restoreCallData() {
+      const saved = getFromLocalStorage('appState');
+      if (saved) {
+        Object.assign(state, saved);
+        updateStatusIndicator();
+        document.getElementById('baseNumber').textContent = state.baseNumber;
+        document.getElementById('seriesValue').textContent = state.series;
+        document.getElementById('last4').textContent = state.last4;
+        document.getElementById('attempts').textContent = state.attempts;
+        const l4 = document.getElementById('last4Input');
+        const ai = document.getElementById('attemptsInput');
+        if (l4) l4.value = state.last4;
+        if (ai) ai.value = state.attempts;
+        applyShuffleToggleState();
+      }
+    }
+
+    // ===== Call Analytics =====
+    function addCallRecord(number, tag) {
+      const records = getFromLocalStorage('callRecords') || [];
+      records.push({
+        timestamp: new Date().toISOString(),
+        number: number,
+        tag: tag,
+        duration: '00:00'
+      });
+      saveToLocalStorage('callRecords', records);
+    }
+
+    function getCallRecords(limit = 50) {
+      const records = getFromLocalStorage('callRecords') || [];
+      return records.slice(-limit).reverse();
+    }
+
+    // ===== Report Generation =====
+    function generateLocalReport(timeRange) {
+      const records = getCallRecords();
+      const now = new Date();
+
+      let filteredRecords = records;
+
+      if (timeRange !== 'all') {
+        const [startHour, endHour] = timeRange.split('-').map(Number);
+        filteredRecords = records.filter(r => {
+          const hour = new Date(r.timestamp).getHours();
+          return hour >= startHour && hour < endHour;
+        });
+      }
+
+      const report = {
+        generated: new Date().toISOString(),
+        timeRange: timeRange,
+        totalRecords: filteredRecords.length,
+        summary: {
+          busy: filteredRecords.filter(r => r.tag === 'busy').length,
+          answered: filteredRecords.filter(r => r.tag === 'answered').length,
+          unanswered: filteredRecords.filter(r => r.tag === 'unanswered').length,
+          pending: filteredRecords.filter(r => !r.tag).length
+        },
+        records: filteredRecords
+      };
+
+      saveToLocalStorage('lastReport', report);
+      return report;
+    }
+
+    // ===== Request Animation Frame for smooth updates =====
+    function scheduleUpdate() {
+      requestAnimationFrame(() => {
+        persistCallData();
+      });
+    }
+
+    function applyInterval() {
+      const ii = document.getElementById('intervalInput');
+      let sec = parseInt(ii && ii.value ? ii.value : '5', 10);
+      if (isNaN(sec)) sec = 5;
+      sec = Math.max(1, Math.min(60, sec));
+      if (ii) ii.value = String(sec);
+      try { AndroidBridge.updateCallInterval(sec); } catch (e) { console.warn(e); }
+      showToast('Interval set to ' + sec + 's');
+    }
+
+    function applyAutoSmsToggleState() {
+      const t = document.getElementById('autoSmsToggle');
+      if (!t) return;
+      const on = !!state.autoSmsUnanswered;
+      t.classList.toggle('on', on);
+      t.classList.toggle('off', !on);
+    }
+
+    function toggleAutoSms() {
+      state.autoSmsUnanswered = !state.autoSmsUnanswered;
+      applyAutoSmsToggleState();
+      try { AndroidBridge.setAutoSmsUnanswered(state.autoSmsUnanswered ? 1 : 0); } catch (e) { console.warn(e); }
+      showToast('Auto SMS ' + (state.autoSmsUnanswered ? 'enabled' : 'disabled'));
+      scheduleUpdate();
+    }
+
+    function saveAdmin() {
+      const el = document.getElementById('adminNumberInput');
+      if (!el) return;
+      const digits = (el.value || '').replace(/\D/g,'').slice(-11);
+      if (digits.length !== 11) { showToast('Admin number must be 11 digits'); return; }
+      try { AndroidBridge.updateAdminNumber(digits); } catch (e) { console.warn(e); }
+      showToast('Admin saved');
+    }
+
+    // ===== Full Report Rendering =====
+    function htmlEscape(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+
+    function buildWindowSection(title, rows) {
+      const safeTitle = htmlEscape(title);
+      let html = `<div class="card" style="margin-top:10px"><div class="label" style="margin-bottom:8px">${safeTitle}</div>`;
+      if (!rows || !rows.length) {
+        html += `<div class="modal-info">No records</div></div>`;
+        return html;
+      }
+      html += `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">Time</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">Number</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">Status</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">Duration</th>
+        </tr></thead>
+        <tbody>`;
+      rows.forEach(r => {
+        html += `<tr>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)">${htmlEscape(r.time)}</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)">${htmlEscape(r.number)}</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)">${htmlEscape(r.status).toUpperCase()}</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)">${htmlEscape(r.duration)}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div></div>`;
+      return html;
+    }
+
+    function renderFullReport(data, focusWindow) {
+      lastFullReportJSON = data;
+      const sum = data.summary || {};
+      const contentEl = document.getElementById('fullReportContent');
+      const summaryEl = document.getElementById('fullReportSummary');
+      if (!contentEl || !summaryEl) return;
+
+      // Summary badges
+      summaryEl.innerHTML = `
+        <div class="card" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+          <div class="modal-info"><div class="label">Answered</div><div style="font-weight:800;font-size:18px">${sum.answered||0}</div></div>
+          <div class="modal-info"><div class="label">Busy</div><div style="font-weight:800;font-size:18px">${sum.busy||0}</div></div>
+          <div class="modal-info"><div class="label">Unanswered</div><div style="font-weight:800;font-size:18px">${sum.unanswered||0}</div></div>
+          <div class="modal-info"><div class="label">Total</div><div style="font-weight:800;font-size:18px">${sum.total||0}</div></div>
+        </div>`;
+
+      const windows = data.windows || {};
+      const outside = data.outside || [];
+      let html = '';
+
+      const winOrder = ['9-11','11-14','14-16','16-18'];
+      if (focusWindow && winOrder.includes(focusWindow)) {
+        const rows = (windows[focusWindow] || []).map(x=>x);
+        html += buildWindowSection(`${focusWindow} window`, rows);
+      } else {
+        winOrder.forEach(win => {
+          const rows = (windows[win] || []).map(x=>x);
+          html += buildWindowSection(`${win} window`, rows);
+        });
+        html += buildWindowSection('Outside timeframe', (outside || []).map(x=>x));
+      }
+
+      contentEl.innerHTML = html;
+    }
+
+    function showExportLoading() {
+      let loadingBar = document.getElementById('exportLoadingBar');
+      if (!loadingBar) {
+        loadingBar = document.createElement('div');
+        loadingBar.id = 'exportLoadingBar';
+        loadingBar.style.position = 'fixed';
+        loadingBar.style.top = '0';
+        loadingBar.style.left = '0';
+        loadingBar.style.width = '0%';
+        loadingBar.style.height = '6px';
+        loadingBar.style.background = 'linear-gradient(90deg,#10b981,#059669)';
+        loadingBar.style.transition = 'width 0.3s';
+        loadingBar.style.zIndex = '9999';
+        document.body.appendChild(loadingBar);
+      }
+      loadingBar.style.width = '0%';
+      loadingBar.style.display = 'block';
+      setTimeout(() => { loadingBar.style.width = '80%'; }, 100);
+    }
+
+    function hideExportLoading(success = true) {
+      const loadingBar = document.getElementById('exportLoadingBar');
+      if (loadingBar) {
+        loadingBar.style.width = '100%';
+        setTimeout(() => {
+          loadingBar.style.display = 'none';
+          loadingBar.style.width = '0%';
+          if (success) showToast('Report uploaded successfully!', 2500);
+          else showToast('Failed to upload report', 2500);
+        }, 600);
+      }
+    }
+
+    function exportAndSendReport() {
+      showExportLoading();
+      if (AndroidBridge && AndroidBridge.exportReport) {
+        AndroidBridge.exportReport();
+        // Simulate progress for demo, hide after 2s
+        setTimeout(() => hideExportLoading(true), 2000);
+      } else {
+        hideExportLoading(false);
+      }
+    }
+
+    // ===== Initialization =====
+    window.addEventListener('load', () => {
+      console.log('UI loaded and ready');
+      updateStatusIndicator();
+      restoreCallData();
+      bindEditableInputs();
+      updateSeriesDisplay();
+      // Initialize inputs visual values
+      const l4 = document.getElementById('last4Input');
+      const ai = document.getElementById('attemptsInput');
+      if (l4) l4.value = state.last4 || '0000';
+      if (ai) ai.value = state.attempts || 5;
+
+      // Wire interval input
+      const ii = document.getElementById('intervalInput');
+      if (ii) {
+        ii.addEventListener('keydown', (e)=>{ if (e.key==='Enter') applyInterval(); });
+      }
+      // Notify Android that UI is ready
+      try {
+        AndroidBridge.uiReady();
+      } catch (e) {
+        console.warn('uiReady not available:', e);
+      }
+
+      // Show welcome toast
+      setTimeout(() => {
+        showToast('ACCM Autodialer Ready', 2000);
+      }, 500);
+
+      // Setup periodic saves
+      setInterval(persistCallData, 5000);
+    });
+
+    // ===== Unload Handler =====
+    window.addEventListener('beforeunload', () => {
+      persistCallData();
+    });
+
+    // ===== Error Handler =====
+    window.addEventListener('error', (e) => {
+      console.error('Global error:', e.error);
+      showToast('An error occurred. Check console.');
+    });
+
+    // ===== Enhanced Android Update Handler =====
+    const originalUpdateFromAndroid = window.updateFromAndroid;
+    window.updateFromAndroid = function(obj) {
+      if (!obj) return;
+      if (obj.toast) {
+        showToast(obj.toast);
+      }
+      if (originalUpdateFromAndroid) originalUpdateFromAndroid(obj);
+      if (obj.smsLoading) showSmsLoading();
+      if (obj.smsSent) hideSmsLoading(true);
+      if (obj.smsFailed) hideSmsLoading(false);
+      scheduleUpdate();
+    };
+
+    // ===== Progress for Auto SMS Sending =====
+    function showSmsLoading() {
+      showLoading();
+      document.getElementById('toast').textContent = 'Sending SMS...';
+    }
+    function hideSmsLoading(success = true) {
+      hideLoading();
+      showToast(success ? 'SMS sent successfully!' : 'Failed to send SMS');
+    }
+
+    function ensureAgentBranchInputs() {
+      if (window.Android) {
+        try {
+          const agent = window.Android.getAgentName();
+          const branch = window.Android.getBranchName();
+          document.getElementById('agentNameInput').value = agent || '';
+          document.getElementById('branchNameInput').value = branch || '';
+        } catch (e) {}
+      }
+    }
+
+    document.getElementById('saveAgentBranchBtn').onclick = function() {
+      const agent = document.getElementById('agentNameInput').value.trim();
+      const branch = document.getElementById('branchNameInput').value.trim();
+      if (agent) window.Android.setAgentName(agent);
+      if (branch) window.Android.setBranchName(branch);
+      showToast('Agent/Branch saved');
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      ensureAgentBranchInputs();
+    });
+</script>
+</body>
+</html>
