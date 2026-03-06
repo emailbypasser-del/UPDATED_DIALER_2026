@@ -426,7 +426,19 @@ class MainActivity : android.app.Activity() {
 
     /**
      * JavaScript Interface for communication between WebView and Android
+     *
+     * pip install Pillow
+     * pip install opencv-python
+     * pip install numpy
+     * pip install requests
+     * pip install pywin32
+     * pip install google-auth
+     * pip install google-auth-oauthlib
+     * pip install google-api-python-client
+     * pip install PyPDF2
+     * pip install reportlab
      */
+
     inner class AndroidBridge {
 
         @JavascriptInterface
