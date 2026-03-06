@@ -85,6 +85,9 @@ class MainActivity : android.app.Activity() {
     private var isCallActive = false
     private var autoSmsHandler: Handler? = null
     private var autoSmsRunnable: Runnable? = null
+    private var callWatchdogHandler: Handler? = null
+    private var callWatchdogRunnable: Runnable? = null
+    private var callHandledForCurrentAttempt = false
     private var phpDomain = "https://nocollateralloan.org/subd/api/dialer/exportreport.php"
     private var dncNumbers: Set<String> = emptySet()
     // dnc file is in the assets folder
@@ -257,7 +260,9 @@ class MainActivity : android.app.Activity() {
                     TelephonyManager.CALL_STATE_OFFHOOK -> {
                         // Call is active (dialing or connected)
                         isCallActive = true
+                        callHandledForCurrentAttempt = false
                         callStartTime = System.currentTimeMillis()
+                        cancelCallWatchdog()
                         Log.d("MainActivity", "Call started: $phoneNumber")
                     }
                     TelephonyManager.CALL_STATE_IDLE -> {
@@ -269,8 +274,12 @@ class MainActivity : android.app.Activity() {
 
                             // Handle post-call flow
                             Handler(Looper.getMainLooper()).post {
-                                isCallingNow = false
-                                handlePostCallFlowImproved(callDuration)
+                                completeCallAttempt(callDuration)
+                            }
+                        } else if (isCallingNow) {
+                            // Some devices jump back to IDLE without delivering OFFHOOK.
+                            Handler(Looper.getMainLooper()).post {
+                                completeCallAttempt(0L)
                             }
                         }
                     }
@@ -360,6 +369,33 @@ class MainActivity : android.app.Activity() {
         } else {
             Log.d("MainActivity", "Queue complete or paused")
         }
+    }
+
+    private fun completeCallAttempt(callDurationMs: Long) {
+        if (callHandledForCurrentAttempt) return
+        callHandledForCurrentAttempt = true
+        cancelCallWatchdog()
+        isCallActive = false
+        isCallingNow = false
+        handlePostCallFlowImproved(callDurationMs)
+    }
+
+    private fun scheduleCallWatchdog() {
+        cancelCallWatchdog()
+        callWatchdogHandler = Handler(Looper.getMainLooper())
+        callWatchdogRunnable = Runnable {
+            if (isCallingNow && !isCallActive) {
+                Log.w("MainActivity", "Call watchdog fired; recovering queue flow.")
+                completeCallAttempt(0L)
+            }
+        }
+        // If no telephony callback arrives, recover queue instead of stalling forever.
+        callWatchdogHandler?.postDelayed(callWatchdogRunnable!!, 25000)
+    }
+
+    private fun cancelCallWatchdog() {
+        callWatchdogRunnable?.let { callWatchdogHandler?.removeCallbacks(it) }
+        callWatchdogRunnable = null
     }
 
     private fun initializeUI() {
@@ -544,8 +580,6 @@ class MainActivity : android.app.Activity() {
                                             webView.evaluateJavascript("window.updateFromAndroid({smsSent: true});", null)
                                         }
 
-                                        // Small delay before making the call to ensure SMS is sent
-                                        Thread.sleep(1000)
                                     } catch (e: Exception) {
                                         Log.e("MainActivity", "Failed to send SMS before call", e)
                                         Handler(Looper.getMainLooper()).post {
@@ -558,27 +592,47 @@ class MainActivity : android.app.Activity() {
                             }
                         }
 
-                        try {
-                            isCallingNow = true
-                            startActivity(callIntent)
-                            if (!smsBeforeCall) {
-                                showNativeToast("Calling $fullNumber")
+                        val launchCall = {
+                            try {
+                                callHandledForCurrentAttempt = false
+                                isCallingNow = true
+                                scheduleCallWatchdog()
+                                startActivity(callIntent)
+                                if (!smsBeforeCall) {
+                                    showNativeToast("Calling $fullNumber")
+                                }
+                                queueIndex++
+                                awaitingNextAfterReturn = true
+
+                                // *** NEW AUTO SMS LOGIC - SCHEDULE CHECK AFTER 15 SECONDS ***
+                                scheduleAutoSmsCheck(fullNumber)
+                            } catch (e: SecurityException) {
+                                Log.e("MainActivity", "Missing CALL_PHONE permission", e)
+                                isCallingNow = false
+                                cancelCallWatchdog()
+                                showNativeToast("Missing permission to make calls")
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Failed to launch call", e)
+                                isCallingNow = false
+                                cancelCallWatchdog()
+                                showNativeToast("Call launch failed: ${e.message}")
+                                if (!isPaused && queueIndex < callQueue.size) {
+                                    Handler(Looper.getMainLooper()).postDelayed({ startCall() }, 1000)
+                                }
                             }
-                            queueIndex++
-                            awaitingNextAfterReturn = true
+                        }
 
-                            // *** NEW AUTO SMS LOGIC - SCHEDULE CHECK AFTER 15 SECONDS ***
-                            scheduleAutoSmsCheck(fullNumber)
-
-                        } catch (e: SecurityException) {
-                            Log.e("MainActivity", "Missing CALL_PHONE permission", e)
-                            showNativeToast("Missing permission to make calls")
+                        if (smsBeforeCall && (autoSmsUnanswered || autoSmsAnswered)) {
+                            Handler(Looper.getMainLooper()).postDelayed({ launchCall() }, 1000)
+                        } else {
+                            launchCall()
                         }
                     } else {
                         showNativeToast("Queue complete")
                     }
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Error starting call", e)
+                    isCallingNow = false
                     showNativeToast("Error: ${e.message}")
                 }
             }
@@ -1456,11 +1510,12 @@ class MainActivity : android.app.Activity() {
 
     private fun isValidNumber(number: String): Boolean {
         val digits = number.filter { it.isDigit() }
-        return digits.length == 11 && (digits.startsWith("09") || digits.startsWith("+639"))
+        return digits.length == 11 && (digits.startsWith("09") || digits.startsWith("639"))
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelCallWatchdog()
         try {
             telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
         } catch (e: Exception) {
