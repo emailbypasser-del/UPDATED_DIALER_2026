@@ -410,7 +410,7 @@ class MainActivity : android.app.Activity() {
                     paused: $isPaused,
                     messageTemplate: '$messageTemplate',
                     shuffle: $shuffleOn,
-                    agent: '$agentName',
+                    agent: '$agentName',    
                     branch: '$branchName',
                     callIntervalSec: ${(callIntervalMs / 1000).toInt()},
                     autoSmsUnanswered: $autoSmsUnanswered,
